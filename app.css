@@ -1,0 +1,13 @@
+.sphere, .grid {
+    fill: none;
+    stroke: #DDD;
+}
+
+.country {
+    fill: white;
+    stroke: #888;
+}
+
+.highlight {
+    fill: #888;
+}
