@@ -1,24 +1,80 @@
 
 function geoChart() {
-    function drawChart(world, svg, projectionName, animate) {
-        var projection = d3.geo[projectionName]()
-            .scale(170)
-            .translate([svg.attr('width') / 2, svg.attr('height') / 2])
+    var projections = {
+        'baker': d3.geo.baker().scale(100)
+    }
+
+    function createProjection(name) {
+        return projections[name] || d3.geo[name]().scale(170);
+    }
+
+    function drawChart(world, svg, projectionName, animate, oldProjectionName) {
+        var width = svg.attr('width'),
+            height = svg.attr('height');
+        var projection = createProjection(projectionName)
+            .translate([width / 2, height / 2])
             .precision(.1)
+
+        var oldProjection;
+        if(oldProjectionName) {
+            oldProjection = createProjection(oldProjectionName)
+                .translate([width/2, height/2])
+                .precision(.1)
+        }
+
+        function anim(element) {
+            return animate ? element.transition() : element;
+        }
+
+        function projectionTween(oldProjection, newProjection) {
+            return function(d) {
+                var t = 0;
+                function toDegrees(radians) {
+                    return radians * 180 / Math.PI;
+                }
+
+                function project(lat, lon) {
+                    lat = toDegrees(lat);
+                    lon = toDegrees(lon);
+
+                    var p0 = oldProjection([lat, lon]),
+                        p1 = newProjection([lat, lon]);
+
+                    return [(1-t) * p0[0] + t * p1[0],
+                            (1-t) * -p0[1] + t * -p1[1]];
+                }
+
+                var projection = d3.geo.projection(project)
+                    .scale(1)
+                    .translate([width / 2, height / 2]);
+
+                var path = d3.geo.path().projection(projection);
+
+                return function(tweenStep) {
+                    t = tweenStep;
+                    return path(d);
+                }
+            }
+        }
 
         var projectionPath = d3.geo.path().projection(projection);
         var sphereSelection = svg.selectAll('defs').data(['defs']);
 
         sphereSelection.enter().append('defs').append('path');
 
-        function anim(element) {
-            return animate ? element.transition() : element;
+        var spherePath = sphereSelection.select('path')
+            .datum({type: 'Sphere'})
+            .attr('id', 'sphere');
+
+            window.oldProjection = oldProjection;
+            window.projection = projection;
+
+        function applyProjection(selection) {
+            animate ? anim(selection).attrTween('d', projectionTween(oldProjection, projection))
+                : selection.attr('d', projectionPath);
         }
 
-        sphereSelection.select('path')
-            .datum({type: 'Sphere'})
-            .attr('id', 'sphere')
-            .attr('d', projectionPath);
+        applyProjection(spherePath);
 
         svg.selectAll('use').data(['use']).enter()
             .append('use')
@@ -27,9 +83,10 @@ function geoChart() {
 
         var graticule = d3.geo.graticule();
 
-        var graticuleSelection = svg.selectAll('path.graticule').data([graticule])
-        graticuleSelection.enter().append('path').attr('class', 'grid graticule');
-        graticuleSelection.attr('d', projectionPath);
+        // var graticuleSelection = svg.selectAll('path.graticule').data([graticule])
+        // graticuleSelection.enter().append('path').attr('class', 'grid graticule');
+        // graticuleSelection.attr('d', projectionPath);
+        // applyProjection(graticuleSelection);
 
         var countrySelection =  svg.selectAll('.country')
             .data(topojson.feature(world, world.objects.countries).features)
@@ -40,19 +97,21 @@ function geoChart() {
 
         countrySelection.attr({
             id: function(d) {return 'country_' + d.properties.id;},
-            d: projectionPath
+            // d: projectionPath
         }).on('click', function(d) {
             var currentSelection = this;
             var country = d3.select(currentSelection);
             d3.select('#countryName').text(country.datum().properties.admin);
             d3.selectAll('.country').filter(function(c) {return this !== currentSelection}).classed('highlight', false);
             country.classed('highlight', !country.classed('highlight'));
-        });
+        }).call(applyProjection);
+
+        oldProjection = projection;
     }
 
     var world, svg, projection;
-    var chart = function() {
-        drawChart(world, svg, projection || 'eckert5');
+    var chart = function(animate, oldProjectionName) {
+        drawChart(world, svg, projection || 'eckert5', animate, oldProjectionName);
     }
     chart.world = function(_world) { world = _world; return chart;}
     chart.svg = function(_svg) {svg = _svg; return chart;}
@@ -66,7 +125,7 @@ function init() {
     queue().defer(d3.json, 'world-topo.json')
         .await(processData);
     d3.select('#projection').on('change', function() {
-        drawChart(worldData);
+        drawChart(worldData, true);
     });
 }
 
@@ -75,8 +134,11 @@ function processData(error, data) {
     worldData = data;
     drawChart(worldData);
 }
-function drawChart(data) {
-    geoChart().world(data).svg(d3.select('svg')).projection(d3.select('#projection').node().value).drawChart();
+var oldProjectionName;
+function drawChart(data, animate) {
+    var projection = d3.select('#projection').node().value;
+    geoChart().world(data).svg(d3.select('svg')).projection(projection).drawChart(animate, oldProjectionName);
+    oldProjectionName = projection;
 }
 
 init();
