@@ -1,11 +1,16 @@
 
 function geoChart() {
     var projections = {
-        'baker': d3.geo.baker().scale(100)
+        'baker': function() {return d3.geo.baker().scale(100)}
+    }
+
+    function rotateProjection(projection, angle) {
+        return projection.rotate([angle, 0]);
+        // return projection;
     }
 
     function createProjection(name) {
-        return projections[name] || d3.geo[name]().scale(170);
+        return rotateProjection(projections[name] ? projections[name]() : d3.geo[name]().scale(170), 90);
     }
 
     function drawChart(world, svg, projectionName, animate, oldProjectionName) {
@@ -23,7 +28,7 @@ function geoChart() {
         }
 
         function anim(element) {
-            return animate ? element.transition() : element;
+            return animate ? element.transition().duration(1000) : element;
         }
 
         function projectionTween(oldProjection, newProjection) {
@@ -68,6 +73,7 @@ function geoChart() {
 
             window.oldProjection = oldProjection;
             window.projection = projection;
+            window.projectionPath = projectionPath;
 
         function applyProjection(selection) {
             animate ? anim(selection).attrTween('d', projectionTween(oldProjection, projection))
@@ -83,10 +89,10 @@ function geoChart() {
 
         var graticule = d3.geo.graticule();
 
-        // var graticuleSelection = svg.selectAll('path.graticule').data([graticule])
-        // graticuleSelection.enter().append('path').attr('class', 'grid graticule');
-        // graticuleSelection.attr('d', projectionPath);
-        // applyProjection(graticuleSelection);
+        var graticuleSelection = svg.selectAll('path.graticule').data([graticule()])
+        graticuleSelection.enter().append('path').attr('class', 'grid graticule');
+        applyProjection(graticuleSelection);
+        window.graticuleSelection = graticuleSelection;
 
         var countrySelection =  svg.selectAll('.country')
             .data(topojson.feature(world, world.objects.countries).features)
@@ -97,7 +103,6 @@ function geoChart() {
 
         countrySelection.attr({
             id: function(d) {return 'country_' + d.properties.id;},
-            // d: projectionPath
         }).on('click', function(d) {
             var currentSelection = this;
             var country = d3.select(currentSelection);

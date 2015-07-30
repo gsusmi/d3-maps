@@ -3,6 +3,10 @@
     stroke: #DDD;
 }
 
+.sphere {
+    fill: aliceblue;
+}
+
 .country {
     fill: white;
     stroke: #888;
