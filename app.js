@@ -1,16 +1,18 @@
-
 function geoChart() {
+    'use strict';
+
+    var rotationAngles = [0, 0];
+
     var projections = {
         'baker': function() {return d3.geo.baker().scale(100)}
     }
 
-    function rotateProjection(projection, angle) {
-        return projection.rotate([angle, 0]);
-        // return projection;
+    function rotateProjection(projection) {
+        return projection.rotate(rotationAngles);
     }
 
     function createProjection(name) {
-        return rotateProjection(projections[name] ? projections[name]() : d3.geo[name]().scale(170), 90);
+        return rotateProjection(projections[name] ? projections[name]() : d3.geo[name]().scale(170));
     }
 
     function drawChart(world, svg, projectionName, animate, oldProjectionName) {
@@ -32,6 +34,9 @@ function geoChart() {
         }
 
         function projectionTween(oldProjection, newProjection) {
+            // Unrotated the projections before interpolating:
+            oldProjection = oldProjection.rotate([0, 0]);
+            newProjection = newProjection.rotate([0, 0]);
             return function(d) {
                 var t = 0;
                 function toDegrees(radians) {
@@ -49,9 +54,10 @@ function geoChart() {
                             (1-t) * -p0[1] + t * -p1[1]];
                 }
 
-                var projection = d3.geo.projection(project)
-                    .scale(1)
-                    .translate([width / 2, height / 2]);
+                var projection = rotateProjection(
+                    d3.geo.projection(project)
+                        .scale(1)
+                        .translate([width / 2, height / 2]));
 
                 var path = d3.geo.path().projection(projection);
 
@@ -121,6 +127,7 @@ function geoChart() {
     chart.world = function(_world) { world = _world; return chart;}
     chart.svg = function(_svg) {svg = _svg; return chart;}
     chart.projection = function(_projection) { projection = _projection; return chart;}
+    chart.rotate = function (_angle) { rotationAngles = _angle; return chart; }
     chart.drawChart = chart;
     return chart;
 }
@@ -142,7 +149,7 @@ function processData(error, data) {
 var oldProjectionName;
 function drawChart(data, animate) {
     var projection = d3.select('#projection').node().value;
-    geoChart().world(data).svg(d3.select('svg')).projection(projection).drawChart(animate, oldProjectionName);
+    geoChart().world(data).svg(d3.select('svg')).projection(projection).rotate([90, 0]).drawChart(animate, oldProjectionName);
     oldProjectionName = projection;
 }
 
