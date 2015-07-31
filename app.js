@@ -1,7 +1,8 @@
 
 function geoChart() {
     var projections = {
-        'baker': function() {return d3.geo.baker().scale(100)}
+        baker: function() {return d3.geo.baker().scale(100)},
+        aitoff: function() { return d3.geo.aitoff().scale(100); }
     }
 
     function rotateProjection(projection, angle) {
