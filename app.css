@@ -15,3 +15,8 @@
 .highlight {
     fill: #888;
 }
+
+path.night {
+    stroke: #55C;
+    fill: rgba(0, 0, 0, 0.3);
+}

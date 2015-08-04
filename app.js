@@ -2,6 +2,7 @@ function geoChart() {
     'use strict';
 
     var rotationAngles = [0, 0];
+    var time = new Date;
 
     var projections = {
         baker: function() {return d3.geo.baker().scale(100)},
@@ -19,6 +20,9 @@ function geoChart() {
     function drawChart(world, svg, projectionName, animate, oldProjectionName) {
         var width = svg.attr('width'),
             height = svg.attr('height');
+
+        var animateProjection = (oldProjectionName && oldProjectionName !== projectionName);
+
         var projection = createProjection(projectionName)
             .translate([width / 2, height / 2])
             .precision(.1)
@@ -83,8 +87,10 @@ function geoChart() {
             window.projectionPath = projectionPath;
 
         function applyProjection(selection) {
-            animate ? anim(selection).attrTween('d', projectionTween(oldProjection, projection))
-                : selection.attr('d', projectionPath);
+            if(!animate) {return selection.attr('d', projectionPath);}
+
+            return animateProjection ? anim(selection).attrTween('d', projectionTween(oldProjection, projection))
+                : anim(selection).attr('d', projectionPath);
         }
 
         applyProjection(spherePath);
@@ -118,7 +124,34 @@ function geoChart() {
             country.classed('highlight', !country.classed('highlight'));
         }).call(applyProjection);
 
-        oldProjection = projection;
+        var circle = d3.geo.circle().angle(90);
+        var night = svg.selectAll('path.night').data(function(d) {
+            var value = circle.origin(antipode(solarPosition(time)))();
+            value.time = time;
+            return [value];
+        });
+        night.enter().append('path').attr('class', 'night');
+
+        function nightTween(d) {
+            var t = 0;
+            var oldTime = d.oldTime || d3.time.hour.offset(d.time, -1),
+                newTime = d.time;
+
+            function path() {
+                var currentTime = d3.time.second.offset(oldTime, ((newTime - oldTime) / 1000) * t);
+                var currentPath = circle.origin(antipode(solarPosition(currentTime)))();
+                return projectionPath(currentPath);
+            }
+            return function(tweenStep) {
+                t = tweenStep;
+                return path();
+            }
+        }
+
+        animate ? night.transition().duration(1000).ease('linear').attrTween('d', nightTween) : night.attr('d', projectionPath).datum(function(d) {
+            d.oldTime = d.time;
+            return d;
+        });
     }
 
     var world, svg, projection;
@@ -129,11 +162,12 @@ function geoChart() {
     chart.svg = function(_svg) {svg = _svg; return chart;}
     chart.projection = function(_projection) { projection = _projection; return chart;}
     chart.rotate = function (_angle) { rotationAngles = _angle; return chart; }
+    chart.time = function(_time) {time = _time; return chart;}
     chart.drawChart = chart;
     return chart;
 }
 
-var worldData;
+var worldData, chartTime = new Date(), intervalId;
 function init() {
     queue().defer(d3.json, 'world-topo.json')
         .await(processData);
@@ -146,11 +180,28 @@ function processData(error, data) {
     if(error) {console.error("ERROR proccessing data")}
     worldData = data;
     drawChart(worldData);
+
+    d3.select('#day').on('click', function() {
+        intervalId = setInterval(function() {
+            chartTime = d3.time.hour.offset(chartTime, 1);
+            drawChart(worldData, true);
+        }, 1000);
+    });
+
+    d3.select('#reset').on('click', function() {
+        clearInterval(intervalId);
+        chartTime = new Date();
+        drawChart(worldData, true);
+    });
 }
 var oldProjectionName;
 function drawChart(data, animate) {
     var projection = d3.select('#projection').node().value;
-    geoChart().world(data).svg(d3.select('svg')).projection(projection).rotate([90, 0]).drawChart(animate, oldProjectionName);
+    geoChart().world(data).svg(d3.select('svg'))
+        .time(chartTime)
+        .projection(projection)
+        .rotate([90, 0])
+        .drawChart(animate, oldProjectionName);
     oldProjectionName = projection;
 }
 
