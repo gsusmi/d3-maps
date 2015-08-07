@@ -2,11 +2,11 @@ function geoChart() {
     'use strict';
 
     var rotationAngles = [0, 0];
-    var time = new Date;
+    var time = new Date, previousTerminatorTime;
 
     var projections = {
         baker: function() {return d3.geo.baker().scale(100)},
-        aitoff: function() { return d3.geo.aitoff().scale(100); }
+        aitoff: function() { return d3.geo.aitoff().scale(130); }
     }
 
     function rotateProjection(projection) {
@@ -88,9 +88,8 @@ function geoChart() {
 
         function applyProjection(selection) {
             if(!animate) {return selection.attr('d', projectionPath);}
-
             return animateProjection ? anim(selection).attrTween('d', projectionTween(oldProjection, projection))
-                : anim(selection).attr('d', projectionPath);
+                : selection.attr('d', projectionPath);
         }
 
         applyProjection(spherePath);
@@ -134,7 +133,7 @@ function geoChart() {
 
         function nightTween(d) {
             var t = 0;
-            var oldTime = d.oldTime || d3.time.hour.offset(d.time, -1),
+            var oldTime = previousTerminatorTime,
                 newTime = d.time;
 
             function path() {
@@ -148,10 +147,14 @@ function geoChart() {
             }
         }
 
-        animate ? night.transition().duration(1000).ease('linear').attrTween('d', nightTween) : night.attr('d', projectionPath).datum(function(d) {
-            d.oldTime = d.time;
-            return d;
-        });
+        animate && previousTerminatorTime ? night.transition().duration(1000).ease('linear').attrTween('d', nightTween) : applyProjection(night);
+
+        var timeLabel = svg.selectAll('text.time').data(['time']);
+        timeLabel.enter().append('text').attr('class', 'time');
+        timeLabel.attr({
+            x: width - 160,
+            dy: 20
+        }).text(d3.time.format('%x %X %p')(time));
     }
 
     var world, svg, projection;
@@ -162,7 +165,11 @@ function geoChart() {
     chart.svg = function(_svg) {svg = _svg; return chart;}
     chart.projection = function(_projection) { projection = _projection; return chart;}
     chart.rotate = function (_angle) { rotationAngles = _angle; return chart; }
-    chart.time = function(_time) {time = _time; return chart;}
+    chart.time = function(_time, _previousTerminatorTime) {
+        time = _time;
+        previousTerminatorTime = _previousTerminatorTime;
+        return chart;
+    }
     chart.drawChart = chart;
     return chart;
 }
@@ -181,24 +188,52 @@ function processData(error, data) {
     worldData = data;
     drawChart(worldData);
 
-    d3.select('#day').on('click', function() {
-        intervalId = setInterval(function() {
-            chartTime = d3.time.hour.offset(chartTime, 1);
-            drawChart(worldData, true);
-        }, 1000);
+    var timeIncrement = incrementHour;
+
+    function incrementHour(time) {
+        return d3.time.hour.offset(time, 1);
+    }
+
+    function incrementDays(time) {
+        return d3.time.hour.offset(time, 49);
+    }
+
+    function animateTerminator() {
+        var oldChartTime = chartTime;
+        chartTime = timeIncrement(chartTime);
+        drawChart(worldData, true, oldChartTime);
+    }
+
+    d3.selectAll('#day, #fastAnimation').on('click', function() {
+        if(intervalId) {return;}
+        var animationId = d3.select(this).attr('id');
+        timeIncrement = animationId === 'fastAnimation' ? incrementDays : incrementHour;
+
+        animateTerminator();
+        intervalId = setInterval(animateTerminator, 1000);
     });
+
+    d3.select('#stop').on('click', function() {
+        clearInterval(intervalId);
+        intervalId = undefined;
+    })
 
     d3.select('#reset').on('click', function() {
         clearInterval(intervalId);
+        intervalId = undefined;
+        var oldChartTime = chartTime;
         chartTime = new Date();
-        drawChart(worldData, true);
+        oldChartTime = oldChartTime || chartTime;
+        drawChart(worldData, true, oldChartTime);
     });
+
+
 }
 var oldProjectionName;
-function drawChart(data, animate) {
+function drawChart(data, animate, previousTerminatorTime) {
     var projection = d3.select('#projection').node().value;
     geoChart().world(data).svg(d3.select('svg'))
-        .time(chartTime)
+        .time(chartTime, previousTerminatorTime)
         .projection(projection)
         .rotate([90, 0])
         .drawChart(animate, oldProjectionName);

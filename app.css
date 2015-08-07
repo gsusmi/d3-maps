@@ -1,3 +1,7 @@
+html {
+    font-family: 'Lucida Grande';
+    font-size: 12px;
+}
 .sphere, .grid {
     fill: none;
     stroke: #DDD;
