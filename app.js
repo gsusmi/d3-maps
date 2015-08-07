@@ -131,14 +131,30 @@ function geoChart() {
         });
         night.enter().append('path').attr('class', 'night');
 
+        function wrapAngle(angle) {
+            return angle > 0 ? angle + 360 : angle - 360;
+        }
+
         function nightTween(d) {
             var t = 0;
             var oldTime = previousTerminatorTime,
                 newTime = d.time;
 
+            var newTimeAntipode = antipode(solarPosition(newTime)),
+                oldTimeAntipode = antipode(solarPosition(oldTime));
+
+            var deltaX = newTimeAntipode[0] - oldTimeAntipode[0],
+                deltaY = newTimeAntipode[1] - oldTimeAntipode[1];
+
+            if(Math.abs(deltaX) > 180) {newTimeAntipode[0] = wrapAngle(newTimeAntipode[0]);}
+            if(Math.abs(deltaY) > 180) {newTimeAntipode[1] = wrapAngle(newTimeAntipode[1]);}
+
             function path() {
-                var currentTime = d3.time.second.offset(oldTime, ((newTime - oldTime) / 1000) * t);
-                var currentPath = circle.origin(antipode(solarPosition(currentTime)))();
+                var currentTimeAntipode = [
+                    (oldTimeAntipode[0] * (1 - t)) + (newTimeAntipode[0] * t),
+                    (oldTimeAntipode[1] * (1 - t)) + (newTimeAntipode[1] * t)
+                ];
+                var currentPath = circle.origin(currentTimeAntipode)();
                 return projectionPath(currentPath);
             }
             return function(tweenStep) {
@@ -195,7 +211,7 @@ function processData(error, data) {
     }
 
     function incrementDays(time) {
-        return d3.time.hour.offset(time, 49);
+        return d3.time.hour.offset(time, 7 * 24);
     }
 
     function animateTerminator() {
